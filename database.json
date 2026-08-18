@@ -1,0 +1,15 @@
+{
+  "settings": {
+    "total": 10,
+    "pass": 9
+  },
+  "records": [
+    {
+      "student_id": "26810",
+      "fullname": "นายสมชาย ใจดี",
+      "class": "ม6",
+      "room": "1",
+      "timestamp": "19/8/2569 05:47:53"
+    }
+  ]
+}
