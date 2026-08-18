@@ -6,7 +6,7 @@ const cors = require('cors');
 const QRCode = require('qrcode');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000; 
 const DB_FILE = path.join(__dirname, 'database.json');
 
 app.use(cors());
@@ -14,35 +14,47 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true })); 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ------------------------------------------------------------------
+// 📌 แก้ไขตรงนี้: เข้าหน้าเว็บหลักแล้วให้เด้งไปหน้า QR Code ทันที
+// ------------------------------------------------------------------
+app.get('/', (req, res) => {
+    res.redirect('/admin');
+});
+
 // โครงสร้างฐานข้อมูล
 if (!fs.existsSync(DB_FILE)) {
     const initialData = {
-        settings: { total: 10, pass: 9 }, // ค่าเริ่มต้น จัด 10 ผ่าน 9
+        settings: { total: 10, pass: 9 },
         records: []
     };
     fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2), 'utf8');
 }
 
-const readDB = () => JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+const readDB = () => {
+    try {
+        let data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+        if (Array.isArray(data)) {
+            data = { settings: { total: 10, pass: 9 }, records: data };
+            fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
+        }
+        if (!data.records) data.records = [];
+        if (!data.settings) data.settings = { total: 10, pass: 9 };
+        return data;
+    } catch (e) {
+        return { settings: { total: 10, pass: 9 }, records: [] };
+    }
+};
+
 const writeDB = (data) => fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
 
 // ------------------------------------------------------------------
 // 1. หน้าจอแสดง QR Code (สำหรับให้ครูเปิดขึ้นโปรเจคเตอร์)
 // ------------------------------------------------------------------
 app.get('/admin', async (req, res) => {
-    const { networkInterfaces } = require('os');
-    const nets = networkInterfaces();
-    let localIp = 'localhost';
-
-    for (const name of Object.keys(nets)) {
-        for (const net of nets[name]) {
-            if (net.family === 'IPv4' && !net.internal) {
-                localIp = net.address;
-            }
-        }
-    }
-
-    const scanUrl = `http://${localIp}:${PORT}/scan`;
+    // ดึง Domain หลักของเว็บ (เพื่อรองรับทั้ง Localhost และ Render.com)
+    const protocol = req.protocol;
+    const host = req.get('host');
+    const scanUrl = `${protocol}://${host}/scan`;
 
     try {
         const qrImageBase64 = await QRCode.toDataURL(scanUrl);
@@ -75,7 +87,7 @@ app.get('/admin', async (req, res) => {
 });
 
 // ------------------------------------------------------------------
-// 2. ฝั่งเด็ก - หน้าฟอร์ม (ดึงจากไฟล์ /public/student_form.html)
+// 2. ฝั่งเด็ก - หน้าฟอร์ม
 // ------------------------------------------------------------------
 app.get('/scan', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'student_form.html'));
@@ -109,7 +121,7 @@ app.post('/api/submit-entry', (req, res) => {
 });
 
 // ------------------------------------------------------------------
-// 3. API สำหรับบันทึกการตั้งค่าเกณฑ์
+// 3. API บันทึกการตั้งค่าเกณฑ์
 // ------------------------------------------------------------------
 app.post('/api/update-settings', (req, res) => {
     const { total, pass } = req.body;
@@ -121,13 +133,12 @@ app.post('/api/update-settings', (req, res) => {
 });
 
 // ------------------------------------------------------------------
-// 4. หน้า Dashboard สำหรับครู (ตั้งเกณฑ์ + ดูสรุปยอด)
+// 4. หน้า Dashboard (ตั้งเกณฑ์ + ดูสรุปยอด)
 // ------------------------------------------------------------------
 app.get('/dashboard', (req, res) => {
     const db = readDB();
     const { total, pass } = db.settings;
     
-    // คำนวณยอดเด็กแต่ละคน
     const summary = {};
     db.records.forEach(r => {
         if (!summary[r.student_id]) {
@@ -142,12 +153,10 @@ app.get('/dashboard', (req, res) => {
         summary[r.student_id].count += 1;
     });
 
-    // เรียงคนที่เข้าบ่อยสุดขึ้นก่อน
     const studentList = Object.values(summary).sort((a, b) => b.count - a.count);
 
     let tableRows = '';
     studentList.forEach((entry, index) => {
-        // เช็กสถานะว่าผ่านเกณฑ์ที่ตั้งไว้หรือไม่
         const isPassed = entry.count >= pass;
         const statusHtml = isPassed 
             ? `<span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-semibold border border-green-300">✅ ผ่านเกณฑ์</span>` 
@@ -186,7 +195,6 @@ app.get('/dashboard', (req, res) => {
                     </div>
                 </div>
 
-                <!-- กล่องตั้งค่าเกณฑ์กิจกรรม -->
                 <div class="bg-white p-6 rounded-xl shadow-lg border-t-4 border-amber-500 mb-6">
                     <h2 class="text-lg font-semibold mb-2 text-amber-700">⚙️ กำหนดเกณฑ์การผ่านกิจกรรม</h2>
                     <p class="text-sm text-gray-500 mb-4">กำหนดเป้าหมายว่าเด็กต้องเข้ากี่ครั้งถึงจะผ่าน ระบบจะอัปเดตสถานะในตารางด้านล่างให้อัตโนมัติ</p>
@@ -200,13 +208,12 @@ app.get('/dashboard', (req, res) => {
                             <label class="block text-sm font-semibold text-gray-700">เกณฑ์ที่ต้องผ่าน (ครั้ง)</label>
                             <input type="number" id="pass" value="${pass}" min="1" class="mt-1 p-2 border border-gray-300 rounded w-full focus:ring-2 focus:ring-amber-400 outline-none">
                         </div>
-                        <button type="submit" class="bg-amber-600 text-white font-bold px-6 py-2 rounded hover:bg-amber-700 shadow transition w-full sm:w-auto">
+                        <button type="submit" class="bg-amber-600 text-white px-6 py-2 rounded hover:bg-amber-700 shadow transition w-full sm:w-auto">
                             💾 บันทึกเกณฑ์ใหม่
                         </button>
                     </form>
                 </div>
                 
-                <!-- ตารางสรุปรายชื่อเด็ก -->
                 <div class="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
                     <div class="bg-gray-800 text-white p-4 flex justify-between items-center">
                         <h2 class="font-semibold">ผลการเข้าร่วมกิจกรรมของนักเรียน</h2>
@@ -233,7 +240,6 @@ app.get('/dashboard', (req, res) => {
             </div>
 
             <script>
-                // สคริปต์ส่งข้อมูลไปตั้งค่าเกณฑ์ใหม่
                 document.getElementById('settingsForm').addEventListener('submit', async function(e) {
                     e.preventDefault();
                     const total = document.getElementById('total').value;
@@ -255,7 +261,7 @@ app.get('/dashboard', (req, res) => {
                                 timer: 1500,
                                 showConfirmButton: false
                             }).then(() => {
-                                window.location.reload(); // รีเฟรชหน้าเว็บเพื่ออัปเดตตาราง
+                                window.location.reload();
                             });
                         }
                     } catch(err) {
@@ -269,7 +275,5 @@ app.get('/dashboard', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 รันระบบสำเร็จที่: http://localhost:${PORT}`);
-    console.log(`👨‍🏫 เปิดหน้า QR สำหรับสแกนที่: http://localhost:${PORT}/admin`);
-    console.log(`⚙️  ตั้งค่าเกณฑ์ / ดูรายชื่อที่: http://localhost:${PORT}/dashboard`);
+    console.log(`🚀 Server running on port ${PORT}`);
 });
