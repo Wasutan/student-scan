@@ -19,7 +19,7 @@
             <p class="text-xs text-gray-500 mt-1">กรอกข้อมูลและแนบรูปถ่ายการทำกิจกรรม</p>
         </div>
 
-        <form action="/api/submit-entry" method="POST" enctype="multipart/form-data" class="space-y-4">
+        <form id="studentForm" action="/api/submit-entry" method="POST" enctype="multipart/form-data" class="space-y-4">
             <!-- Hidden inputs สำหรับส่งค่ากิจกรรม -->
             <input type="hidden" name="activity_name" id="activity_name">
             <input type="hidden" name="is_mandatory" id="is_mandatory">
@@ -51,20 +51,18 @@
 
             <div>
                 <label class="block text-xs font-semibold text-gray-700 mb-1">แนบรูปถ่ายกิจกรรม *</label>
-                <!-- เอา capture="environment" ออกแล้ว เพื่อให้ผู้ใช้เลือกว่าจะถ่ายรูป หรือเลือกรูปจากอัลบั้มได้ -->
                 <input type="file" name="photo" accept="image/*" required
                     class="w-full text-xs text-gray-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border border-gray-300 rounded-lg cursor-pointer">
-                <p class="text-[11px] text-gray-400 mt-1">💡 กดแล้วสามารถเลือกถ่ายภาพใหม่ หรือเลือกจากคลังภาพได้ทันที</p>
+                <p class="text-[11px] text-gray-400 mt-1">💡 เลือกถ่ายภาพใหม่ หรือเลือกจากคลังภาพได้</p>
             </div>
 
-            <button type="submit" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition shadow-md text-sm mt-2">
+            <button type="submit" id="submitBtn" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition shadow-md text-sm mt-2">
                 📤 ส่งข้อมูลเข้าร่วมกิจกรรม
             </button>
         </form>
     </div>
 
     <script>
-        // ดึงค่า URL Query String มาใส่ในฟอร์มอัตโนมัติ
         const urlParams = new URLSearchParams(window.location.search);
         const activity = urlParams.get('activity') || 'กิจกรรมทั่วไป';
         const mandatory = urlParams.get('mandatory') === 'true';
@@ -76,6 +74,14 @@
         if (mandatory) {
             document.getElementById('badge-mandatory').classList.remove('hidden');
         }
+
+        // ป้องกันการกดปุ่มส่งซ้ำ (Anti-Double Submit)
+        document.getElementById('studentForm').addEventListener('submit', function() {
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.innerText = '⏳ กำลังส่งข้อมูล... กรุณารอสักครู่';
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+        });
     </script>
 </body>
 </html>
