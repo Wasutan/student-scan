@@ -5,9 +5,9 @@ const path = require('path');
 const cors = require('cors');
 const QRCode = require('qrcode');
 const multer = require('multer');
-const { networkInterfaces } = require('os');
 
 const app = express();
+app.set('trust proxy', 1); // สำหรับดึง Protocol/Host บน Cloud Server (Render)
 const PORT = process.env.PORT || 3000;
 const DB_FILE = path.join(__dirname, 'database.json');
 
@@ -31,6 +31,11 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// แก้ไขอาการ Cannot GET / (เมื่อเข้าหน้าแรก ให้ Redirect ไป /admin ทันที)
+app.get('/', (req, res) => {
+    res.redirect('/admin');
+});
 
 // อ่าน-เขียน Database
 const readDB = () => {
@@ -56,17 +61,6 @@ if (!fs.existsSync(DB_FILE)) {
 // ------------------------------------------------------------------
 app.get('/admin', async (req, res) => {
     const { activity, mandatory } = req.query;
-
-    // หา Local IP เครื่องครู
-    const nets = networkInterfaces();
-    let localIp = 'localhost';
-    for (const name of Object.keys(nets)) {
-        for (const net of nets[name]) {
-            if (net.family === 'IPv4' && !net.internal) {
-                localIp = net.address;
-            }
-        }
-    }
 
     // ถ้ายังไม่ได้ตั้งชื่อกิจกรรม ให้แสดงฟอร์มสร้าง QR
     if (!activity) {
@@ -107,9 +101,11 @@ app.get('/admin', async (req, res) => {
         `);
     }
 
-    // เมื่อระบุกิจกรรมแล้ว สร้าง QR Code ลิงก์ไปยัง /scan
+    // ดึง Domain/URL ปัจจุบันอัตโนมัติ (รองรับทั้ง Localhost และ Render)
     const isMandatory = mandatory === 'true';
-    const scanUrl = `http://${localIp}:${PORT}/scan?activity=${encodeURIComponent(activity)}&mandatory=${isMandatory}`;
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const host = req.get('host');
+    const scanUrl = `${protocol}://${host}/scan?activity=${encodeURIComponent(activity)}&mandatory=${isMandatory}`;
 
     try {
         const qrImageBase64 = await QRCode.toDataURL(scanUrl);
@@ -361,7 +357,5 @@ app.get('/dashboard', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 เซิร์ฟเวอร์ทำงานแล้วที่: http://localhost:${PORT}`);
-    console.log(`👨‍🏫 หน้า Admin สร้าง QR Code: http://localhost:${PORT}/admin`);
-    console.log(`⚙️  หน้า Dashboard สรุปยอด: http://localhost:${PORT}/dashboard`);
+    console.log(`🚀 เซิร์ฟเวอร์ทำงานแล้วที่ Port: ${PORT}`);
 });
