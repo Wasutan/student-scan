@@ -3,69 +3,78 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ลงชื่อบำเพ็ญประโยชน์</title>
+    <title>บันทึกการเข้าร่วมกิจกรรม</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Prompt&display=swap" rel="stylesheet">
     <style>body { font-family: 'Prompt', sans-serif; }</style>
 </head>
-<body class="bg-gray-100 p-4 pb-12">
-    <div class="max-w-md mx-auto bg-white p-6 rounded-2xl shadow-lg border-t-8 border-indigo-500 mt-4">
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-xl w-full max-w-md border-t-8 border-indigo-600">
         
-        <div class="bg-indigo-50 p-4 rounded-lg mb-6 border border-indigo-100 text-center">
-            <p class="text-xs text-indigo-500 font-semibold mb-1">กิจกรรม:</p>
-            <h2 id="display_activity" class="text-xl font-bold text-indigo-900">-</h2>
-            <div id="display_badge" class="hidden mt-2">
-                <span class="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-xs font-bold border border-amber-300">⭐ กิจกรรมบังคับ</span>
-            </div>
+        <div class="text-center mb-6">
+            <span id="badge-mandatory" class="hidden bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-xs font-bold border border-amber-300 mb-2 inline-block">
+                ⭐ กิจกรรมบังคับ
+            </span>
+            <h1 class="text-xl sm:text-2xl font-bold text-gray-800" id="display-activity">ลงชื่อเข้าร่วมกิจกรรม</h1>
+            <p class="text-xs text-gray-500 mt-1">กรอกข้อมูลและแนบรูปถ่ายการทำกิจกรรม</p>
         </div>
 
         <form action="/api/submit-entry" method="POST" enctype="multipart/form-data" class="space-y-4">
-            <input type="hidden" name="activity_name" id="input_activity">
-            <input type="hidden" name="is_mandatory" id="input_mandatory">
+            <!-- Hidden inputs สำหรับส่งค่ากิจกรรม -->
+            <input type="hidden" name="activity_name" id="activity_name">
+            <input type="hidden" name="is_mandatory" id="is_mandatory">
 
             <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-1">รหัสนักเรียน</label>
-                <input type="number" name="student_id" required placeholder="เช่น 12345" class="w-full p-3 border rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-400 outline-none">
+                <label class="block text-xs font-semibold text-gray-700 mb-1">รหัสประจำตัวนักเรียน *</label>
+                <input type="text" name="student_id" required placeholder="เช่น 12345"
+                    class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 outline-none text-sm">
             </div>
 
             <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-1">ชื่อ-นามสกุล</label>
-                <input type="text" name="fullname" required placeholder="นายสมชาย ใจดี" class="w-full p-3 border rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-400 outline-none">
+                <label class="block text-xs font-semibold text-gray-700 mb-1">ชื่อ-นามสกุล *</label>
+                <input type="text" name="fullname" required placeholder="เช่น เด็กชายรักดี มีสุข"
+                    class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 outline-none text-sm">
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-2 gap-3">
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-1">ชั้น</label>
-                    <input type="text" name="student_class" required placeholder="ม.4" class="w-full p-3 border rounded-lg border-gray-300 outline-none">
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">ระดับชั้น *</label>
+                    <input type="text" name="student_class" required placeholder="เช่น ม.1"
+                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 outline-none text-sm">
                 </div>
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-1">ห้อง</label>
-                    <input type="number" name="student_room" required placeholder="1" class="w-full p-3 border rounded-lg border-gray-300 outline-none">
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">ห้อง *</label>
+                    <input type="text" name="student_room" required placeholder="เช่น 2"
+                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 outline-none text-sm">
                 </div>
             </div>
 
-            <div class="p-4 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 text-center">
-                <label class="block text-sm font-bold text-gray-700 mb-2">📸 อัปโหลดรูปภาพหลักฐาน</label>
-                <input type="file" name="photo" accept="image/*" capture="environment" required class="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+            <div>
+                <label class="block text-xs font-semibold text-gray-700 mb-1">แนบรูปถ่ายกิจกรรม *</label>
+                <!-- เอา capture="environment" ออกแล้ว เพื่อให้ผู้ใช้เลือกว่าจะถ่ายรูป หรือเลือกรูปจากอัลบั้มได้ -->
+                <input type="file" name="photo" accept="image/*" required
+                    class="w-full text-xs text-gray-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border border-gray-300 rounded-lg cursor-pointer">
+                <p class="text-[11px] text-gray-400 mt-1">💡 กดแล้วสามารถเลือกถ่ายภาพใหม่ หรือเลือกจากคลังภาพได้ทันที</p>
             </div>
 
-            <button type="submit" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition shadow-md mt-6">
-                ✅ ส่งข้อมูลและบันทึก
+            <button type="submit" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition shadow-md text-sm mt-2">
+                📤 ส่งข้อมูลเข้าร่วมกิจกรรม
             </button>
         </form>
     </div>
 
     <script>
+        // ดึงค่า URL Query String มาใส่ในฟอร์มอัตโนมัติ
         const urlParams = new URLSearchParams(window.location.search);
         const activity = urlParams.get('activity') || 'กิจกรรมทั่วไป';
-        const isMandatory = urlParams.get('mandatory') === 'true';
+        const mandatory = urlParams.get('mandatory') === 'true';
 
-        document.getElementById('display_activity').textContent = activity;
-        document.getElementById('input_activity').value = activity;
-        document.getElementById('input_mandatory').value = isMandatory;
+        document.getElementById('display-activity').innerText = activity;
+        document.getElementById('activity_name').value = activity;
+        document.getElementById('is_mandatory').value = mandatory;
 
-        if (isMandatory) {
-            document.getElementById('display_badge').classList.remove('hidden');
+        if (mandatory) {
+            document.getElementById('badge-mandatory').classList.remove('hidden');
         }
     </script>
 </body>
