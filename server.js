@@ -32,7 +32,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// แก้ไขอาการ Cannot GET / (เมื่อเข้าหน้าแรก ให้ Redirect ไป /admin ทันที)
+// เมื่อเข้าหน้าแรก ให้ Redirect ไป /admin ทันที
 app.get('/', (req, res) => {
     res.redirect('/admin');
 });
@@ -62,7 +62,6 @@ if (!fs.existsSync(DB_FILE)) {
 app.get('/admin', async (req, res) => {
     const { activity, mandatory } = req.query;
 
-    // ถ้ายังไม่ได้ตั้งชื่อกิจกรรม ให้แสดงฟอร์มสร้าง QR
     if (!activity) {
         return res.send(`
             <!DOCTYPE html>
@@ -101,7 +100,6 @@ app.get('/admin', async (req, res) => {
         `);
     }
 
-    // ดึง Domain/URL ปัจจุบันอัตโนมัติ (รองรับทั้ง Localhost และ Render)
     const isMandatory = mandatory === 'true';
     const protocol = req.headers['x-forwarded-proto'] || req.protocol;
     const host = req.get('host');
@@ -181,7 +179,47 @@ app.post('/api/submit-entry', upload.single('photo'), (req, res) => {
 });
 
 // ------------------------------------------------------------------
-// 3. API อัปเดตเกณฑ์
+// 3. API ดึงประวัติกิจกรรมแยกตามรายบุคคล
+// ------------------------------------------------------------------
+app.get('/api/student-history/:student_id', (req, res) => {
+    const studentId = req.params.student_id;
+    const db = readDB();
+    const studentRecords = db.records.filter(r => r.student_id === studentId);
+
+    if (studentRecords.length === 0) {
+        return res.status(404).json({ status: 'error', message: 'ไม่พบประวัติ' });
+    }
+
+    // จัดกลุ่มตามชื่อกิจกรรม
+    const activitiesGrouped = {};
+    studentRecords.forEach(r => {
+        if (!activitiesGrouped[r.activity_name]) {
+            activitiesGrouped[r.activity_name] = {
+                activity_name: r.activity_name,
+                is_mandatory: r.is_mandatory,
+                entries: []
+            };
+        }
+        activitiesGrouped[r.activity_name].entries.push({
+            timestamp: r.timestamp,
+            photo_url: r.photo_url
+        });
+    });
+
+    res.json({
+        status: 'success',
+        student: {
+            student_id: studentRecords[0].student_id,
+            fullname: studentRecords[0].fullname,
+            class: studentRecords[0].class,
+            room: studentRecords[0].room
+        },
+        activities: Object.values(activitiesGrouped)
+    });
+});
+
+// ------------------------------------------------------------------
+// 4. API อัปเดตเกณฑ์
 // ------------------------------------------------------------------
 app.post('/api/update-settings', (req, res) => {
     const { total, pass, mandatory_pass } = req.body;
@@ -194,7 +232,7 @@ app.post('/api/update-settings', (req, res) => {
 });
 
 // ------------------------------------------------------------------
-// 4. หน้า Dashboard สรุปผล
+// 5. หน้า Dashboard สรุปผล + ปุ่มดูประวัติกิจกรรม
 // ------------------------------------------------------------------
 app.get('/dashboard', (req, res) => {
     const db = readDB();
@@ -209,19 +247,11 @@ app.get('/dashboard', (req, res) => {
                 class: r.class,
                 room: r.room,
                 count: 0,
-                mandatory_count: 0,
-                photos: []
+                mandatory_count: 0
             };
         }
         summary[r.student_id].count += 1;
         if (r.is_mandatory) summary[r.student_id].mandatory_count += 1;
-        if (r.photo_url) {
-            summary[r.student_id].photos.push({
-                activity: r.activity_name,
-                url: r.photo_url,
-                time: r.timestamp
-            });
-        }
     });
 
     const studentList = Object.values(summary).sort((a, b) => b.count - a.count);
@@ -236,12 +266,8 @@ app.get('/dashboard', (req, res) => {
         } else {
             const lackTotal = Math.max(0, pass - entry.count);
             const lackMandatory = Math.max(0, mandatory_pass - entry.mandatory_count);
-            statusHtml = `<span class="bg-red-100 text-red-700 px-2 py-1 rounded-full text-xs font-semibold border border-red-300">❌ ขาดรวม ${lackTotal} / ขาดบังคับ ${lackMandatory}</span>`;
+            statusHtml = `<span class="bg-red-100 text-red-700 px-2 py-1 rounded-full text-xs font-semibold border border-red-300">❌ ขาดรวม ${lackTotal} / บังคับ ${lackMandatory}</span>`;
         }
-
-        const photoHtml = entry.photos.length > 0
-            ? `<a href="${entry.photos[entry.photos.length - 1].url}" target="_blank" class="text-indigo-600 hover:underline font-semibold text-xs">📸 ดูรูปภาพ (${entry.photos.length})</a>`
-            : `<span class="text-gray-400 text-xs">-</span>`;
 
         tableRows += `
             <tr class="border-b hover:bg-gray-50 transition">
@@ -252,7 +278,11 @@ app.get('/dashboard', (req, res) => {
                 <td class="p-3 text-sm text-center font-bold text-indigo-600">${entry.count} / ${total}</td>
                 <td class="p-3 text-sm text-center font-bold text-amber-600">${entry.mandatory_count} / ${mandatory_pass}</td>
                 <td class="p-3 text-sm text-center">${statusHtml}</td>
-                <td class="p-3 text-sm text-center">${photoHtml}</td>
+                <td class="p-3 text-sm text-center">
+                    <button onclick="viewStudentHistory('${entry.student_id}')" class="bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold border border-indigo-200 transition shadow-sm">
+                        📜 ดูประวัติกิจกรรม
+                    </button>
+                </td>
             </tr>
         `;
     });
@@ -276,6 +306,7 @@ app.get('/dashboard', (req, res) => {
                     <a href="/admin" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 shadow transition text-sm">🔙 หน้าสร้าง QR Code</a>
                 </div>
 
+                <!-- กำหนดเกณฑ์ -->
                 <div class="bg-white p-6 rounded-xl shadow-lg border-t-4 border-amber-500 mb-6">
                     <h2 class="text-base font-semibold mb-2 text-amber-700">⚙️ กำหนดเกณฑ์การผ่านกิจกรรม</h2>
                     <form id="settingsForm" class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
@@ -297,6 +328,7 @@ app.get('/dashboard', (req, res) => {
                     </form>
                 </div>
 
+                <!-- ตารางแสดงนักเรียน -->
                 <div class="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
                     <div class="bg-gray-800 text-white p-4 flex justify-between items-center">
                         <h2 class="font-semibold text-sm md:text-base">ผลการเข้าร่วมกิจกรรมของนักเรียน</h2>
@@ -313,7 +345,7 @@ app.get('/dashboard', (req, res) => {
                                     <th class="p-3 text-xs text-gray-600 text-center">เข้าร่วมรวม</th>
                                     <th class="p-3 text-xs text-amber-700 text-center">กิจกรรมบังคับ</th>
                                     <th class="p-3 text-xs text-gray-600 text-center">สถานะ</th>
-                                    <th class="p-3 text-xs text-gray-600 text-center">หลักฐาน</th>
+                                    <th class="p-3 text-xs text-gray-600 text-center">ประวัติกิจกรรม & รูปภาพ</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -325,6 +357,7 @@ app.get('/dashboard', (req, res) => {
             </div>
 
             <script>
+                // บันทึกเกณฑ์
                 document.getElementById('settingsForm').addEventListener('submit', async function(e) {
                     e.preventDefault();
                     const total = document.getElementById('total').value;
@@ -350,6 +383,70 @@ app.get('/dashboard', (req, res) => {
                         Swal.fire('ข้อผิดพลาด', 'ไม่สามารถบันทึกเกณฑ์ได้', 'error');
                     }
                 });
+
+                // ดึงประวัติกิจกรรมของนักเรียนเฉพาะบุคคล
+                async function viewStudentHistory(studentId) {
+                    try {
+                        const res = await fetch('/api/student-history/' + studentId);
+                        const data = await res.json();
+                        if (data.status !== 'success') {
+                            Swal.fire('ไม่พบข้อมูล', 'ไม่มีประวัติกิจกรรมของนักเรียนคนนี้', 'warning');
+                            return;
+                        }
+
+                        let htmlContent = \`
+                            <div class="text-left space-y-4 max-h-[70vh] overflow-y-auto p-1">
+                                <div class="bg-indigo-50 p-3 rounded-lg border border-indigo-200">
+                                    <p class="text-xs text-gray-500">นักเรียน:</p>
+                                    <p class="text-base font-bold text-indigo-900">\${data.student.fullname} (\${data.student.student_id})</p>
+                                    <p class="text-xs text-indigo-700">ชั้น \${data.student.class}/\${data.student.room}</p>
+                                </div>
+                        \`;
+
+                        data.activities.forEach((act, idx) => {
+                            htmlContent += \`
+                                <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <h4 class="font-bold text-gray-800 text-sm">📌 \${act.activity_name}</h4>
+                                        \${act.is_mandatory ? '<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[11px] font-bold border border-amber-300">⭐ บังคับ</span>' : '<span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-[11px] font-bold border border-blue-300">ทั่วไป</span>'}
+                                    </div>
+                                    <div class="space-y-3">
+                            \`;
+
+                            act.entries.forEach(entry => {
+                                htmlContent += \`
+                                    <div class="bg-white p-3 rounded-lg border border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+                                        <span class="text-xs text-gray-500">🕒 \${entry.timestamp}</span>
+                                        \${entry.photo_url ? \`
+                                            <a href="\${entry.photo_url}" target="_blank" class="block">
+                                                <img src="\${entry.photo_url}" alt="หลักฐาน" class="w-24 h-24 object-cover rounded-lg border border-gray-300 hover:scale-105 transition shadow-sm">
+                                            </a>
+                                        \` : '<span class="text-xs text-gray-400">ไม่มีรูปภาพ</span>'}
+                                    </div>
+                                \`;
+                            });
+
+                            htmlContent += \`
+                                    </div>
+                                </div>
+                            \`;
+                        });
+
+                        htmlContent += '</div>';
+
+                        Swal.fire({
+                            title: '📜 ประวัติการเข้าร่วมกิจกรรม',
+                            html: htmlContent,
+                            width: '600px',
+                            showCloseButton: true,
+                            confirmButtonText: 'ปิดหน้าต่าง',
+                            confirmButtonColor: '#4F46E5'
+                        });
+
+                    } catch (err) {
+                        Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถดึงข้อมูลประวัติได้', 'error');
+                    }
+                }
             </script>
         </body>
         </html>
