@@ -141,7 +141,7 @@ app.get('/admin', async (req, res) => {
 });
 
 // ------------------------------------------------------------------
-// 2. ฝั่งนักเรียน - Form & Submit Photo
+// 2. ฝั่งนักเรียน - Form & Submit Photo (พร้อมระบบป้องกันข้อมูลซ้ำ)
 // ------------------------------------------------------------------
 app.get('/scan', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'student_form.html'));
@@ -155,18 +155,40 @@ app.post('/api/submit-entry', upload.single('photo'), (req, res) => {
     }
 
     const db = readDB();
+    const nowMs = Date.now();
+    const cleanStudentId = student_id.trim();
+    const cleanActivity = activity_name ? activity_name.trim() : 'กิจกรรมทั่วไป';
+
+    // ตรวจสอบว่านักเรียนคนนี้ เคยส่งกิจกรรมชื่อนี้ไปแล้วใน 10 วินาทีที่ผ่านมาหรือไม่
+    const isDuplicate = db.records.some(r => 
+        r.student_id === cleanStudentId &&
+        r.activity_name === cleanActivity &&
+        r.created_at && (nowMs - r.created_at < 10000)
+    );
+
+    if (isDuplicate) {
+        // หากส่งซ้ำในเวลาไล่เลี่ยกัน จะถือว่าบันทึกสำเร็จรอบแรกไปแล้ว และไม่บันทึกรายการที่ 2 ซ้ำ
+        return res.send(`
+            <script>
+                alert('บันทึกข้อมูลเรียบร้อยแล้ว!');
+                window.location.href = '/success.html';
+            </script>
+        `);
+    }
+
     const time = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
     const photoUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
     db.records.push({
-        student_id: student_id.trim(),
+        student_id: cleanStudentId,
         fullname: fullname.trim(),
         class: student_class.trim(),
         room: student_room.trim(),
-        activity_name: activity_name || 'กิจกรรมทั่วไป',
+        activity_name: cleanActivity,
         is_mandatory: is_mandatory === 'true',
         photo_url: photoUrl,
-        timestamp: time
+        timestamp: time,
+        created_at: nowMs
     });
     writeDB(db);
 
@@ -190,7 +212,6 @@ app.get('/api/student-history/:student_id', (req, res) => {
         return res.status(404).json({ status: 'error', message: 'ไม่พบประวัติ' });
     }
 
-    // จัดกลุ่มตามชื่อกิจกรรม
     const activitiesGrouped = {};
     studentRecords.forEach(r => {
         if (!activitiesGrouped[r.activity_name]) {
@@ -357,7 +378,6 @@ app.get('/dashboard', (req, res) => {
             </div>
 
             <script>
-                // บันทึกเกณฑ์
                 document.getElementById('settingsForm').addEventListener('submit', async function(e) {
                     e.preventDefault();
                     const total = document.getElementById('total').value;
@@ -384,7 +404,6 @@ app.get('/dashboard', (req, res) => {
                     }
                 });
 
-                // ดึงประวัติกิจกรรมของนักเรียนเฉพาะบุคคล
                 async function viewStudentHistory(studentId) {
                     try {
                         const res = await fetch('/api/student-history/' + studentId);
@@ -403,7 +422,7 @@ app.get('/dashboard', (req, res) => {
                                 </div>
                         \`;
 
-                        data.activities.forEach((act, idx) => {
+                        data.activities.forEach((act) => {
                             htmlContent += \`
                                 <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm">
                                     <div class="flex justify-between items-center mb-2">
