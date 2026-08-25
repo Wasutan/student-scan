@@ -1,7 +1,7 @@
 {
-  "name": "student-qr-system",
+  "name": "scan-system",
   "version": "1.0.0",
-  "description": "Student Activity QR Code System",
+  "description": "Student Scan System",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
